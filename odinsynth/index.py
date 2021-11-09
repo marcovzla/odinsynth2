@@ -1,6 +1,4 @@
 from __future__ import annotations
-import os
-import glob
 import random
 from pathlib import Path
 from typing import Optional, Union
@@ -12,7 +10,7 @@ from odinson.ruleutils.queryast import *
 class IndexedCorpus:
     def __init__(self, ee: ExtractorEngine, docs_dir: Union[str, Path]):
         self.ee = ee
-        self.docs_dir = str(docs_dir)
+        self.docs_dir = Path(docs_dir)
 
     @classmethod
     def from_data_dir(cls, data_dir: Union[str, Path], gw: OdinsonGateway) -> IndexedCorpus:
@@ -22,7 +20,7 @@ class IndexedCorpus:
         data_dir = Path(data_dir)
         docs_dir = data_dir/'docs'
         index_dir = data_dir/'index'
-        ee = gw.open_index(str(index_dir))
+        ee = gw.open_index(index_dir)
         return cls(ee, docs_dir)
 
     def search(self, pattern: Union[str, AstNode], max_hits: Optional[int] = None):
@@ -44,10 +42,10 @@ class IndexedCorpus:
         Opens a random document from our collection.
         """
         # two letter directory, e.g., AA, CD, FJ
-        fold1 = random.choice(glob.glob(os.path.join(self.docs_dir, '*')))
-        # directory wiki_?? where ? is a digit
-        fold2 = random.choice(glob.glob(os.path.join(fold1, '*')))
-        filename = random.choice(glob.glob(os.path.join(fold2, '*-doc.json.gz')))
+        subdir1 = random.choice(list(self.docs_dir.iterdir()))
+        # directory wiki_?? where ? is a digit, e.g., wiki_35, wiki_83
+        subdir2 = random.choice(list(subdir1.iterdir()))
+        filename = random.choice(list(subdir2.glob('*-doc.json.gz')))
         return Document.from_file(filename)
 
     def get_sentence(self, doc: Union[int, ScoreDoc]) -> Sentence:
@@ -82,7 +80,7 @@ class IndexedCorpus:
         """
         Gets a document id and returns the corresponding document.
         """
-        fs = glob.glob(os.path.join(self.docs_dir, '**', f'{doc_id}-doc.json.gz'), recursive=True)
-        if len(fs) != 1:
-            raise Exception(f'{len(fs)} documents found for {doc_id=}')
-        return Document.from_file(fs[0])
+        files = list(self.docs_dir.glob(f'**/{doc_id}-doc.json.gz'))
+        if len(files) != 1:
+            raise Exception(f'{len(files)} documents found for {doc_id=}')
+        return Document.from_file(files[0])
