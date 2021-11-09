@@ -6,7 +6,7 @@ from typing import Optional, Union
 from odinson.gateway import *
 from odinson.ruleutils import *
 from odinson.ruleutils.queryast import *
-from index import IndexedCorpus
+from .index import IndexedCorpus
 from .util import weighted_choice
 
 def quit_function():
