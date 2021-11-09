@@ -7,10 +7,7 @@ from odinson.gateway import *
 from odinson.ruleutils import *
 from odinson.ruleutils.queryast import *
 from index import IndexedCorpus
-
-def random_choice(elements: dict[str, Union[int, float]]) -> str:
-    population, weights = list(zip(*elements.items()))
-    return random.choices(population, weights)[0]
+from .util import weighted_choice
 
 def quit_function():
     thread.interrupt_main()
@@ -105,7 +102,7 @@ class RuleGeneration:
         """
         constraints = []
         for i in range(start, stop):
-            name = random_choice(self.fields)
+            name = weighted_choice(self.fields)
             value = sentence.get_field(name).tokens[i]
             c = FieldConstraint(ExactMatcher(name), ExactMatcher(value))
             constraints.append(c)
@@ -119,7 +116,7 @@ class RuleGeneration:
         while True:
             cs = copy.copy(constraints)
             i = random.randrange(len(cs))
-            action = random_choice(self.constraint_actions)
+            action = weighted_choice(self.constraint_actions)
             if action == "stop":
                 break
             elif action == "or":
@@ -137,7 +134,7 @@ class RuleGeneration:
                 # find an alternative
                 score_doc = random.choice(results.docs)
                 sentence = self.corpus.get_sentence(score_doc)
-                f = random_choice(self.fields)
+                f = weighted_choice(self.fields)
                 v = sentence.get_field(f).tokens[score_doc.matches[0].start]
                 # add new constraint
                 new_constraint = FieldConstraint(ExactMatcher(f), ExactMatcher(v))
@@ -164,7 +161,7 @@ class RuleGeneration:
         """
         while True:
             ns = copy.copy(nodes)
-            action = random_choice(self.surface_actions)
+            action = weighted_choice(self.surface_actions)
             if action == "stop":
                 break
             elif action == "concat":
@@ -223,7 +220,7 @@ class RuleGeneration:
                 if isinstance(ns[i], RepeatSurface):
                     continue
                 # choose random quantifier
-                quantifier = random_choice(self.quantifiers)
+                quantifier = weighted_choice(self.quantifiers)
                 # wrap selected node with quantifier
                 if quantifier == "?":
                     ns[i] = RepeatSurface(ns[i], 0, 1)
