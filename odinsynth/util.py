@@ -30,7 +30,6 @@ def random_spans(seq_len, n_spans, min_size, max_size):
     ret = []
     indices = positive_integers_with_sum(n_spans, seq_len - n_spans * max_size)
     indices = [i + max_size for i in indices]
-    print(indices)
     pos = 0
     for i in indices:
         start = random.randint(pos, i + pos - min_size)
