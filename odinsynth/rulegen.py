@@ -7,7 +7,7 @@ from odinson.gateway import *
 from odinson.ruleutils import *
 from odinson.ruleutils.queryast import *
 from .index import IndexedCorpus
-from .util import weighted_choice
+from .util import weighted_choice, random_span
 
 def quit_function():
     thread.interrupt_main()
@@ -17,6 +17,7 @@ class RuleGeneration:
         self.gw = OdinsonGateway.launch()
         self.corpus = IndexedCorpus(self.gw.open_index(index_dir), docs_dir)
 
+        self.min_span_length = 1
         self.max_span_length = 5
         self.num_matches = 100
 
@@ -78,7 +79,7 @@ class RuleGeneration:
             span = None
             sentence = self.corpus.random_sentence(doc)
         if span is None:
-            span = self.random_span(sentence)
+            span = random_span(sentence.numTokens, self.min_span_length, self.max_span_length)
         start, stop = span
         # make a token constraint for each token in the span
         constraints = self.make_field_constraints(sentence, start, stop)
@@ -243,20 +244,6 @@ class RuleGeneration:
         for n in nodes[1:]:
             rule = ConcatSurface(rule, n)
         return rule
-
-    def random_span(self, sentence: Sentence) -> tuple[int, int]:
-        """
-        Returns a random span from the given sentence.
-        """
-        num_tokens = sentence.numTokens
-        # start can't be the last token in the sentence
-        start = random.randrange(num_tokens - 1)
-        # choose a random size between 1 and max_span_size
-        size = 1 + random.randrange(self.max_span_length)
-        # stop can't be greater than the sentence size
-        stop = min(start + size, num_tokens)
-        # return span
-        return start, stop
 
     def wrap_constraints(self, constraints: list[Constraint]) -> list[Surface]:
         new_constraints = []
