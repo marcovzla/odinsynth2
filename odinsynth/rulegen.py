@@ -2,20 +2,21 @@ import copy
 import random
 import threading
 import _thread as thread
-from typing import Optional, Union
+from typing import Optional
+import networkx as nx
 from odinson.gateway import *
 from odinson.ruleutils import *
 from odinson.ruleutils.queryast import *
+from odinson.ruleutils.queryparser import parse_traversal
 from .index import IndexedCorpus
-from .util import weighted_choice, random_span
+from .util import weighted_choice, random_span, random_spans
 
 def quit_function():
     thread.interrupt_main()
 
 class RuleGeneration:
-    def __init__(self, index_dir, docs_dir):
-        self.gw = OdinsonGateway.launch()
-        self.corpus = IndexedCorpus(self.gw.open_index(index_dir), docs_dir)
+    def __init__(self, corpus: IndexedCorpus):
+        self.corpus = corpus
 
         self.min_span_length = 1
         self.max_span_length = 5
@@ -47,6 +48,11 @@ class RuleGeneration:
             "+": 1,
         }
 
+    @classmethod
+    def from_data_dir(cls, path, gw):
+        corpus = IndexedCorpus.from_data_dir(path, gw)
+        return cls(corpus)
+
     def wait_for_random_surface_rule(self, seconds: int, *args, **kwargs) -> Surface:
         """
         Tries to return a random surface rule, unless it runs out of time.
@@ -59,6 +65,39 @@ class RuleGeneration:
             return None
         finally:
             timer.cancel()
+
+    def random_hybrid_rule(
+        self,
+        sentence: Optional[Sentence] = None,
+        doc: Optional[Document] = None,
+    ) -> HybridQuery:
+        # ensure we have a sentence
+        if sentence is None:
+            sentence = self.corpus.random_sentence(doc)
+        # get two random spans for the source and the target
+        [source, target] = random_spans(sentence.numTokens, 2, self.min_span_length, self.max_span_length)
+        # find candidate paths from source to target
+        dependencies = sentence.get_field('dependencies')
+        digraph = dependencies.to_networkx()
+        all_shortest_paths = nx.shortest_path(digraph)
+        candidate_paths = []
+        for s in range(*source):
+            for t in range(*target):
+                p = all_shortest_paths[s][t]
+                if len(p) > 0:
+                    candidate_paths.append(p)
+        # choose a path
+        # TODO maybe pick the shortest instead?
+        path = random.choice(candidate_paths)
+        steps = [digraph.edges[e[0], e[1]]['label'] for e in nx.path_graph(path).edges]
+        print('src surface')
+        src = self.random_surface_rule(sentence, source)
+        print('tgt surface')
+        tgt = self.random_surface_rule(sentence, target)
+        print('traversal')
+        traversal = parse_traversal(' '.join(steps))
+        return HybridQuery(src, traversal, tgt)
+       
 
     def random_surface_rule(
         self,
