@@ -90,11 +90,8 @@ class RuleGeneration:
         # TODO maybe pick the shortest instead?
         path = random.choice(candidate_paths)
         steps = [digraph.edges[e[0], e[1]]['label'] for e in nx.path_graph(path).edges]
-        print('src surface')
         src = self.random_surface_rule(sentence, source)
-        print('tgt surface')
         tgt = self.random_surface_rule(sentence, target)
-        print('traversal')
         traversal = parse_traversal(' '.join(steps))
         return HybridQuery(src, traversal, tgt)
        
