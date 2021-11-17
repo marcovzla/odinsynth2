@@ -6,11 +6,13 @@ from odinson.gateway import *
 from odinson.gateway.engine import ExtractorEngine
 from odinson.gateway.results import ScoreDoc
 from odinson.ruleutils.queryast import *
+from .util import read_tsv_mapping
 
 class IndexedCorpus:
-    def __init__(self, ee: ExtractorEngine, docs_dir: Union[str, Path]):
+    def __init__(self, ee: ExtractorEngine, docs_dir: Union[str, Path], docs_index: map[str, str]):
         self.ee = ee
         self.docs_dir = Path(docs_dir)
+        self.docs_index = docs_index
 
     @classmethod
     def from_data_dir(cls, data_dir: Union[str, Path], gw: OdinsonGateway) -> IndexedCorpus:
@@ -21,7 +23,25 @@ class IndexedCorpus:
         docs_dir = data_dir/'docs'
         index_dir = data_dir/'index'
         ee = gw.open_index(index_dir)
-        return cls(ee, docs_dir)
+        docs_index = read_tsv_mapping(docs_dir/'documents.tsv')
+        return cls(ee, docs_dir, docs_index)
+
+    def get_results(self, query: Union[str, AstNode], max_hits=None):
+        matches = []
+        results = self.search(query, max_hits)
+        for doc in results.docs:
+            if len(doc.matches) != 1:
+                continue
+            sent = self.get_sentence(doc)
+            m = doc.matches[0]
+            span = (m.start, m.end)
+            matches.append(dict(match=span, sentence=sent.to_dict()))
+        return {
+            'query': str(query),
+            'num_matches': len(matches),
+            'docs_dir': str(self.docs_dir),
+            'matches': matches,
+        }
 
     def search(self, pattern: Union[str, AstNode], max_hits: Optional[int] = None):
         """
@@ -41,11 +61,8 @@ class IndexedCorpus:
         """
         Opens a random document from our collection.
         """
-        # two letter directory, e.g., AA, CD, FJ
-        subdir1 = random.choice(list(self.docs_dir.iterdir()))
-        # directory wiki_?? where ? is a digit, e.g., wiki_35, wiki_83
-        subdir2 = random.choice(list(subdir1.iterdir()))
-        filename = random.choice(list(subdir2.glob('*-doc.json.gz')))
+        doc_id = random.choice(list(self.docs_index.keys()))
+        filename = self.docs_index[doc_id]
         return Document.from_file(filename)
 
     def get_sentence(self, doc: Union[int, ScoreDoc]) -> Sentence:
@@ -80,7 +97,4 @@ class IndexedCorpus:
         """
         Gets a document id and returns the corresponding document.
         """
-        files = list(self.docs_dir.glob(f'**/{doc_id}-doc.json.gz'))
-        if len(files) != 1:
-            raise Exception(f'{len(files)} documents found for {doc_id=}')
-        return Document.from_file(files[0])
+        return Document.from_file(self.docs_index[doc_id])

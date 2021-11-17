@@ -66,3 +66,11 @@ def positive_integers_with_sum(n, total):
     for i in range(1, len(ls)):
         ret.append(ls[i] - ls[i-1])
     return ret
+
+def read_tsv_mapping(filename):
+    mapping = {}
+    with open(filename) as f:
+        for line in f:
+            key, value = line.strip().split('\t')
+            mapping[key] = value
+    return mapping

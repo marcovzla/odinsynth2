@@ -1,7 +1,5 @@
 import copy
 import random
-import threading
-import _thread as thread
 from typing import Optional
 import networkx as nx
 from odinson.gateway import *
@@ -11,8 +9,6 @@ from odinson.ruleutils.queryparser import parse_traversal
 from .index import IndexedCorpus
 from .util import weighted_choice, random_span, random_spans
 
-def quit_function():
-    thread.interrupt_main()
 
 class RuleGeneration:
     def __init__(self, corpus: IndexedCorpus):
@@ -20,32 +16,32 @@ class RuleGeneration:
 
         self.min_span_length = 1
         self.max_span_length = 5
-        self.num_matches = 100
+        self.num_matches = 10
 
         self.fields = {
-            "lemma": 2,
+            "lemma": 5,
             "word": 1,
-            "tag": 2,
+            "tag": 1,
         }
 
         self.constraint_actions = {
-            "or": 1,
-            "and": 1,
+            "or": 2,
+            "and": 0,
             "not": 1,
-            "stop": 1,
+            "stop": 5,
         }
 
         self.surface_actions = {
             "or": 1,
-            "concat": 1,
-            "quantifier": 1,
-            "stop": 1,
+            "concat": 10,
+            "quantifier": 2,
+            "stop": 5,
         }
 
         self.quantifiers = {
-            "?": 1,
+            "?": 5,
             "*": 1,
-            "+": 1,
+            "+": 4,
         }
 
     @classmethod
@@ -53,18 +49,13 @@ class RuleGeneration:
         corpus = IndexedCorpus.from_data_dir(path, gw)
         return cls(corpus)
 
-    def wait_for_random_surface_rule(self, seconds: int, *args, **kwargs) -> Surface:
-        """
-        Tries to return a random surface rule, unless it runs out of time.
-        """
-        timer = threading.Timer(seconds, quit_function)
-        timer.start()
-        try:
-            return self.random_surface_rule(*args, **kwargs)
-        except KeyboardInterrupt:
-            return None
-        finally:
-            timer.cancel()
+    def random_sentence(self, doc=None):
+        # keep trying until we get a sentence of the required length
+        min_size = 2 * self.max_span_length
+        while True:
+            sent = self.corpus.random_sentence(doc)
+            if sent is not None and sent.numTokens >= min_size:
+                return sent
 
     def random_hybrid_rule(
         self,
@@ -73,7 +64,7 @@ class RuleGeneration:
     ) -> HybridQuery:
         # ensure we have a sentence
         if sentence is None:
-            sentence = self.corpus.random_sentence(doc)
+            sentence = self.random_sentence(doc)
         # get two random spans for the source and the target
         [source, target] = random_spans(sentence.numTokens, 2, self.min_span_length, self.max_span_length)
         # find candidate paths from source to target
@@ -83,9 +74,12 @@ class RuleGeneration:
         candidate_paths = []
         for s in range(*source):
             for t in range(*target):
-                p = all_shortest_paths[s][t]
-                if len(p) > 0:
-                    candidate_paths.append(p)
+                try:
+                    p = all_shortest_paths[s][t]
+                    if len(p) > 0:
+                        candidate_paths.append(p)
+                except:
+                    pass
         # choose a path
         # TODO maybe pick the shortest instead?
         path = random.choice(candidate_paths)
@@ -94,7 +88,6 @@ class RuleGeneration:
         tgt = self.random_surface_rule(sentence, target)
         traversal = parse_traversal(' '.join(steps))
         return HybridQuery(src, traversal, tgt)
-       
 
     def random_surface_rule(
         self,
@@ -110,10 +103,11 @@ class RuleGeneration:
         If sentence is provided then document is ignored.
         If sentence is not provided then span is ignored.
         """
+        print("\tRANDOM_SURFACE_RULE open")
         # ensure we have a sentence and a span
         if sentence is None:
             span = None
-            sentence = self.corpus.random_sentence(doc)
+            sentence = self.random_sentence(doc)
         if span is None:
             span = random_span(sentence.numTokens, self.min_span_length, self.max_span_length)
         start, stop = span
@@ -128,6 +122,7 @@ class RuleGeneration:
         # concatenate remaining nodes
         rule = self.concat_surface_nodes(nodes)
         # return surface rule
+        print("\tRANDOM_SURFACE_RULE close")
         return rule
 
     def make_field_constraints(
